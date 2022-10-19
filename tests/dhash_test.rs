@@ -1,4 +1,4 @@
-include!("../src/algo/image/dhash.rs");
+include!("../src/detection/image/dhash.rs");
 
 
 #[test]

@@ -8,7 +8,7 @@
         > POST /filter/create
         ```json
         {
-            "filter_type": "TEXT_WORD"
+            "filter_type": "TEXT_WORD",
             "filter_name": "chinese_porn_words",
             "labels": ["色情", "中文"]
         }

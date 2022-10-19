@@ -1,4 +1,4 @@
-include!("../src/algo/text/trie.rs");
+include!("../src/detection/text/trie.rs");
 
 
 #[test]
