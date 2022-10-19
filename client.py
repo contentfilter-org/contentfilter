@@ -40,8 +40,8 @@ def add():
         print(rsp.text)
 
 
-def query():
-    url = "http://127.0.0.1/content/detect"
+def detect():
+    url = "http://127.0.0.1/detect"
     data = json.dumps(
         {
             "filter_name": "chinese_porn_words",
@@ -55,4 +55,4 @@ def query():
 
 if __name__ == "__main__":
     add()
-    query()
+    detect()

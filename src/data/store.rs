@@ -75,7 +75,7 @@ pub fn add_filter(filter_type: &String, filter_name: &String, labels: &Vec<Strin
         format!(
             "
                 INSERT INTO filter (filter_type, filter_name, labels, create_time) 
-                VALUES ('{:?}', '{:?}', '{:?}', strftime('%s', 'now') * 1000)
+                VALUES ('{:}', '{:}', '{:}', strftime('%s', 'now') * 1000)
             ", filter_type, filter_name, labels.join(";")
         )
     ).unwrap();
@@ -93,11 +93,11 @@ pub fn read_filters() -> Vec<(u64, String, String, Vec<String>, u64)> {
     while let Some(Ok(row)) = cursor.next() {
         filters.push(
             (
-                row.get::<String, _>(0).parse::<u64>().unwrap(),
+                row.get::<i64, _>(0) as u64,
                 row.get::<String, _>(1),
                 row.get::<String, _>(2),
                 row.get::<String, _>(3).split(";").map(|s| s.to_string()).collect::<Vec<String>>(),
-                row.get::<String, _>(4).parse::<u64>().unwrap()
+                row.get::<i64, _>(4) as u64
             )
         );
     }
@@ -114,7 +114,7 @@ pub fn add_sieve(filter_name: &String, target: &String, target_md5: &String, pro
         format!(
             "
                 INSERT OR IGNORE INTO sieve (target, target_md5, property_map, create_time)
-                VALUES ('{:?}', '{:?}', '{:?}', strftime('%s', 'now') * 1000);
+                VALUES ('{:}', '{:}', '{:}', strftime('%s', 'now') * 1000);
             ",
             target, target_md5, property_map
     )
@@ -125,8 +125,8 @@ pub fn add_sieve(filter_name: &String, target: &String, target_md5: &String, pro
     let mut result_tuple: (u64, u64) = (0u64, 0u64);
     if let Some(Ok(row)) = cursor.next() {
         result_tuple = (
-            row.get::<String, _>(0).parse::<u64>().unwrap(), 
-            row.get::<String, _>(1).parse::<u64>().unwrap()
+            row.get::<i64, _>(0) as u64, 
+            row.get::<i64, _>(1) as u64
         );
     }
     Ok(result_tuple)
@@ -142,11 +142,11 @@ pub fn read_sieves(filter_name: &String) -> Vec<(u64, String, String, String, u6
     while let Some(Ok(row)) = cursor.next() {
         sieves.push(
             (
-                row.get::<String, _>(0).parse::<u64>().unwrap(),
+                row.get::<i64, _>(0) as u64,
                 row.get::<String, _>(1),
                 row.get::<String, _>(2),
                 row.get::<String, _>(3),
-                row.get::<String, _>(4).parse::<u64>().unwrap()
+                row.get::<i64, _>(4) as u64
             )
         );
     }

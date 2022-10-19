@@ -155,7 +155,7 @@ impl FilterForest {
                 let filter = TextWordMatchFilter::new(&raw_filter.2, &raw_filter.3);
                 filters.insert(raw_filter.2.clone(), Box::new(filter));
             } else {
-                println!("unsupported filter type: {:?}", filter_type);
+                println!("unsupported filter type: {:}", filter_type);
             }
         }
         FilterForest{filters: filters}
@@ -163,6 +163,9 @@ impl FilterForest {
 
     pub fn detect(&mut self, filter_name: &String, content: &String) -> Result<JsonValue, DetectError> {
         let start_time = Instant::now();
+        for key in self.filters.keys() {
+            println!("{:}", key);
+        }
         if !self.filters.contains_key(filter_name) {
             return Err(DetectError);
         }

@@ -51,7 +51,7 @@
 
 - 请求
 
-    > POST /content/detect
+    > POST /detect
     ```json
     {
         "filter_name": "chinese_porn_words",
