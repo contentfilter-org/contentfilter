@@ -79,21 +79,27 @@ pub async fn add(forest: Data<Mutex<FilterForest>>, body: Bytes) -> HttpResponse
 #[post("/detect")]
 pub async fn detect(forest: Data<Mutex<FilterForest>>, body: Bytes) -> HttpResponse {
     let result = json::parse(std::str::from_utf8(&body).unwrap());
-    let injson: JsonValue = match result {
+    let injson = match result {
         Ok(req) => {
             let filter_name = req["filter_name"].as_str().unwrap().to_string();
             let content = req["content"].as_str().unwrap().to_string();
             let resp = forest.lock().unwrap().detect(&filter_name, &content);
-            resp.unwrap()
+            match resp {
+                Ok(content) => content.to_string(),
+                Err(e) => json::object! {
+                    "err": e.to_string(),
+                    "success": false
+                }.dump()
+            }
         },
         Err(e) => json::object! {
             "err": e.to_string(),
             "success": false
-        },
+        }.dump(),
     };
     HttpResponse::Ok()
     .content_type("application/json")
-    .body(injson.dump())
+    .body(injson)
 }
 
 #[actix_web::main]

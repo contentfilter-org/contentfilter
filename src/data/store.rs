@@ -137,7 +137,7 @@ pub fn read_sieves(filter_name: &String) -> Vec<(u64, String, String, String, u6
     let filter_dbpath = get_filter_dbpath(filter_name);
     let connection = sqlite::open(&filter_dbpath).unwrap();
     let mut cursor = connection.prepare(
-        "SELECT target, target_md5, property_map, create_time FROM sieve"
+        "SELECT id, target, target_md5, property_map, create_time FROM sieve"
     ).unwrap().into_cursor();
     while let Some(Ok(row)) = cursor.next() {
         sieves.push(

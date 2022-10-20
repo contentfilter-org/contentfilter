@@ -4,7 +4,6 @@ include!("../detection/mod.rs");
 use serde_json;
 use md5;
 use std::fmt;
-use json::JsonValue;
 use std::boxed::Box;
 use std::time::Instant;
 use std::collections::HashMap;
@@ -48,7 +47,7 @@ impl Sieve {
         self.target_id
     }
 
-    fn serilize(&self) -> String {
+    fn serilize(&self) -> serde_json::Value {
         let obj = serde_json::json!(
             {
                 "target": self.target,
@@ -58,8 +57,7 @@ impl Sieve {
                 "property_map": self.property_map
             }
         );
-        let obj_str = obj.to_string();
-        obj_str
+        obj
     }
 }
 
@@ -161,7 +159,7 @@ impl FilterForest {
         FilterForest{filters: filters}
     }
 
-    pub fn detect(&mut self, filter_name: &String, content: &String) -> Result<JsonValue, DetectError> {
+    pub fn detect(&mut self, filter_name: &String, content: &String) -> Result<serde_json::Value, DetectError> {
         let start_time = Instant::now();
         for key in self.filters.keys() {
             println!("{:}", key);
@@ -171,16 +169,18 @@ impl FilterForest {
         }
         let filter = self.filters.get_mut(filter_name).unwrap();
         let macthed_sieves = filter.detect(content);
-        let mut matched_sieves_hm: Vec<String> = Vec::new();
+        let mut matched_sieves_json: Vec<serde_json::Value> = Vec::new();
         for sieve in macthed_sieves{
-            matched_sieves_hm.push(sieve.serilize());
+            matched_sieves_json.push(sieve.serilize());
         }
         let duration = start_time.elapsed();
-        let resp = json::object!{
-            "success": true,
-            "hits": matched_sieves_hm,
-            "time": duration.as_secs_f32()
-        };
+        let resp = serde_json::json!(
+            {
+                "success": true,
+                "hits": matched_sieves_json,
+                "time": duration.as_secs_f32()
+            }
+        );
         Ok(resp)
     }
 
@@ -194,7 +194,7 @@ impl FilterForest {
         let twmstr = FilterType::TextWordMatch.to_string();
         if *filter_type == twmstr && !self.filters.contains_key(filter_name) {
             store::add_filter(filter_type, filter_name, labels);
-            let mut filter = TextWordMatchFilter::new(filter_name, labels);
+            let filter = TextWordMatchFilter::new(filter_name, labels);
             self.filters.insert(filter_name.clone(), Box::new(filter));
         } else {
             println!("unsupported filter type or duplicated filter names!");
