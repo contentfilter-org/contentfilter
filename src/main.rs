@@ -1,105 +1,100 @@
 mod config;
 mod filter;
-// mod service;
+mod service;
 
+use std::time::Instant;
 use std::sync::Mutex;
 use actix_web::{web::Data, App, HttpServer};
-
 use actix_web::{
     web::{Bytes},
     post, HttpResponse,
 };
-// use std::sync::Mutex;
-use json::JsonValue;
 use filter::forest::FilterForest;
+use service::{FilterCreateRequest, SieveAddRequest, DetectRequest, ServiceStatus, print_hello};
 
-
-
-pub fn print_hello() {
-    let hello = r"
-         _   _        _  _             _____                _                 _    ______  _  _  _                _ 
-        | | | |      | || |           /  __ \              | |               | |   |  ___|(_)| || |              | |
-        | |_| |  ___ | || |  ___      | /  \/  ___   _ __  | |_   ___  _ __  | |_  | |_    _ | || |_   ___  _ __ | |
-        |  _  | / _ \| || | / _ \     | |     / _ \ | '_ \ | __| / _ \| '_ \ | __| |  _|  | || || __| / _ \| '__|| |
-        | | | ||  __/| || || (_) | _  | \__/\| (_) || | | || |_ |  __/| | | || |_  | |    | || || |_ |  __/| |   |_|
-        \_| |_/ \___||_||_| \___/ ( )  \____/ \___/ |_| |_| \__| \___||_| |_| \__| \_|    |_||_| \__| \___||_|   (_)
-    ";
-    println!("{}", hello)
-}
 
 #[post("/filter/create")]
 pub async fn create(forest: Data<Mutex<FilterForest>>, body: Bytes) -> HttpResponse {
-    let result = json::parse(std::str::from_utf8(&body).unwrap());
-    let injson: JsonValue = match result {
+    let start_time = Instant::now();
+    let req_body = std::str::from_utf8(&body).unwrap();
+    let req_obj: Result<FilterCreateRequest, serde_json::Error> = serde_json::from_str(req_body);
+    let rsp_obj = match req_obj {
         Ok(req) => {
-            let filter_type = req["filter_type"].as_str().unwrap().to_string();
-            let filter_name = req["filter_name"].as_str().unwrap().to_string();
-            let mut labels: Vec<String> = Vec::new();
-            for label in req["labels"].members(){
-                labels.push(label.clone().take().to_string());
-            }
-            forest.lock().unwrap().add_filter(&filter_type, &filter_name, &labels);
-            json::object!{
-                "success": true
-            }
+            let op_status = forest.lock().unwrap().add_filter(&req.filter_type, &req.filter_name, &req.labels);
+            serde_json::json!(
+                {
+                    "status": op_status.to_string(),
+                    "time": start_time.elapsed().as_secs_f64()
+                }
+            )
         },
-        Err(e) => json::object! {
-            "err": e.to_string(),
-            "success": false
-        },
+        Err(_e) => serde_json::json!(
+            {
+                "status": ServiceStatus::RequestParameterError.to_string(),
+                "time": start_time.elapsed().as_secs_f64()
+            }
+        )
     };
     HttpResponse::Ok()
     .content_type("application/json")
-    .body(injson.dump()) 
+    .body(rsp_obj.to_string()) 
 }
 
 #[post("/sieve/add")]
 pub async fn add(forest: Data<Mutex<FilterForest>>, body: Bytes) -> HttpResponse {
-    let result = json::parse(std::str::from_utf8(&body).unwrap());
-    let injson: JsonValue = match result {
+    let start_time = Instant::now();
+    let req_body = std::str::from_utf8(&body).unwrap();
+    let req_obj: Result<SieveAddRequest, serde_json::Error> = serde_json::from_str(req_body);
+    let rsp_obj = match req_obj {
         Ok(req) => {
-            let filter_name = req["filter_name"].as_str().unwrap().to_string();
-            let target = req["target"].as_str().unwrap().to_string();
-            let property_map = req["property_map"].to_string();
-            forest.lock().unwrap().add_sieve(&filter_name, &target, &property_map);
-            json::object!{
-                "success": true
+            let property_map = serde_json::json!(req.property_map).to_string();
+            let op_status = forest.lock().unwrap().add_sieve(&req.filter_name, &req.target, &property_map);
+            serde_json::json!(
+                {
+                    "status": op_status.to_string(),
+                    "time": start_time.elapsed().as_secs_f64()
+                }
+            )
+        },
+        Err(_e) => serde_json::json!(
+            {
+                "status": ServiceStatus::RequestParameterError.to_string(),
+                "time": start_time.elapsed().as_secs_f64()
             }
-        },
-        Err(e) => json::object! {
-            "err": e.to_string(),
-            "success": false
-        },
+        )
     };
     HttpResponse::Ok()
     .content_type("application/json")
-    .body(injson.dump())
+    .body(rsp_obj.to_string())
 }
 
 #[post("/detect")]
 pub async fn detect(forest: Data<Mutex<FilterForest>>, body: Bytes) -> HttpResponse {
-    let result = json::parse(std::str::from_utf8(&body).unwrap());
-    let injson = match result {
+    let start_time = Instant::now();
+    let req_body = std::str::from_utf8(&body).unwrap();
+    let req_obj: Result<DetectRequest, serde_json::Error> = serde_json::from_str(req_body);
+    let mut f = forest.lock().unwrap();
+    let rsp_obj = match req_obj {
         Ok(req) => {
-            let filter_name = req["filter_name"].as_str().unwrap().to_string();
-            let content = req["content"].as_str().unwrap().to_string();
-            let resp = forest.lock().unwrap().detect(&filter_name, &content);
-            match resp {
-                Ok(content) => content.to_string(),
-                Err(e) => json::object! {
-                    "err": e.to_string(),
-                    "success": false
-                }.dump()
-            }
+            let (matched_sieves, op_status) = f.detect(&req.filter_name, &req.content);
+            serde_json::json!(
+                {
+                    "status": op_status.to_string(),
+                    "time": start_time.elapsed().as_secs_f64(),
+                    "hits": &matched_sieves.unwrap_or(vec![])
+                }
+            )
         },
-        Err(e) => json::object! {
-            "err": e.to_string(),
-            "success": false
-        }.dump(),
+        Err(_e) => serde_json::json!(
+            {
+                "status": ServiceStatus::RequestParameterError.to_string(),
+                "time": start_time.elapsed().as_secs_f64()
+            }
+        )
     };
     HttpResponse::Ok()
     .content_type("application/json")
-    .body(injson)
+    .body(rsp_obj.to_string())
 }
 
 #[actix_web::main]

@@ -1,11 +1,12 @@
 include!("../data/mod.rs");
 include!("../detection/mod.rs");
+include!("../service.rs");
 
 use serde_json;
 use md5;
 use std::fmt;
 use std::boxed::Box;
-use std::time::Instant;
+use serde::Serialize;
 use std::collections::HashMap;
 use text::trie::TrieTree;
 
@@ -23,6 +24,7 @@ impl fmt::Display for FilterType {
     }
 }
 
+#[derive(Serialize, Debug)]
 pub struct Sieve {
     target: String,
     target_id: u64,
@@ -41,23 +43,6 @@ impl Sieve {
             property_map: property_map.clone()
         };
         sieve
-    }
-
-    fn id(&self) -> u64 {
-        self.target_id
-    }
-
-    fn serilize(&self) -> serde_json::Value {
-        let obj = serde_json::json!(
-            {
-                "target": self.target,
-                "target_id": self.target_id,
-                "target_md5": self.target_md5,
-                "create_time": self.create_time,
-                "property_map": self.property_map
-            }
-        );
-        obj
     }
 }
 
@@ -128,15 +113,6 @@ impl Filter for TextWordMatchFilter {
     }
 }
 
-#[derive(Debug)]
-pub struct DetectError;
-
-impl fmt::Display for DetectError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "can not use filter to detect content!")
-    }
-}
-
 pub struct FilterForest {
     filters: HashMap<String, Box<dyn Filter>>
 }
@@ -159,45 +135,34 @@ impl FilterForest {
         FilterForest{filters: filters}
     }
 
-    pub fn detect(&mut self, filter_name: &String, content: &String) -> Result<serde_json::Value, DetectError> {
-        let start_time = Instant::now();
-        for key in self.filters.keys() {
-            println!("{:}", key);
-        }
+    pub fn detect(&mut self, filter_name: &String, content: &String) -> (Option<Vec<&Sieve>>, ServiceStatus) {
         if !self.filters.contains_key(filter_name) {
-            return Err(DetectError);
+            return (None, ServiceStatus::FilterNotFoundError);
         }
         let filter = self.filters.get_mut(filter_name).unwrap();
-        let macthed_sieves = filter.detect(content);
-        let mut matched_sieves_json: Vec<serde_json::Value> = Vec::new();
-        for sieve in macthed_sieves{
-            matched_sieves_json.push(sieve.serilize());
-        }
-        let duration = start_time.elapsed();
-        let resp = serde_json::json!(
-            {
-                "success": true,
-                "hits": matched_sieves_json,
-                "time": duration.as_secs_f32()
-            }
-        );
-        Ok(resp)
+        let matched_sieves = filter.detect(content);
+        (Some(matched_sieves), ServiceStatus::Success)
     }
 
-    pub fn add_sieve(&mut self, filter_name: &String, target: &String, property_map: &String) {
+    pub fn add_sieve(&mut self, filter_name: &String, target: &String, property_map: &String) -> ServiceStatus {
+        if !self.filters.contains_key(filter_name) {
+            return ServiceStatus::FilterNotFoundError;
+        }
+        let filter = self.filters.get_mut(filter_name).unwrap();
+        filter.add_sieve(target, property_map);
+        ServiceStatus::Success
+    }
+
+    pub fn add_filter(&mut self, filter_type: &String, filter_name: &String, labels: &Vec<String>) -> ServiceStatus {
         if self.filters.contains_key(filter_name) {
-            self.filters.get_mut(filter_name).unwrap().add_sieve(target, property_map);
+            return ServiceStatus::FilterExistsError;
         }
-    }
-
-    pub fn add_filter(&mut self, filter_type: &String, filter_name: &String, labels: &Vec<String>) {
-        let twmstr = FilterType::TextWordMatch.to_string();
-        if *filter_type == twmstr && !self.filters.contains_key(filter_name) {
-            store::add_filter(filter_type, filter_name, labels);
-            let filter = TextWordMatchFilter::new(filter_name, labels);
-            self.filters.insert(filter_name.clone(), Box::new(filter));
-        } else {
-            println!("unsupported filter type or duplicated filter names!");
+        if *filter_type != FilterType::TextWordMatch.to_string() {
+            return ServiceStatus::FilterTypeNotFoundError;
         }
+        store::add_filter(filter_type, filter_name, labels);
+        let filter = TextWordMatchFilter::new(filter_name, labels);
+        self.filters.insert(filter_name.clone(), Box::new(filter));
+        ServiceStatus::Success
     }
 }
