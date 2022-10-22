@@ -76,12 +76,12 @@ pub async fn detect(forest: Data<Mutex<FilterForest>>, body: Bytes) -> HttpRespo
     let mut f = forest.lock().unwrap();
     let rsp_obj = match req_obj {
         Ok(req) => {
-            let (matched_sieves, op_status) = f.detect(&req.filter_name, &req.content);
+            let (op_status, matched_sieves) = f.detect(&req.filter_name, &req.content);
             serde_json::json!(
                 {
                     "status": op_status.to_string(),
                     "time": start_time.elapsed().as_secs_f64(),
-                    "hits": &matched_sieves.unwrap_or(vec![])
+                    "hits": &matched_sieves
                 }
             )
         },
@@ -99,9 +99,11 @@ pub async fn detect(forest: Data<Mutex<FilterForest>>, body: Bytes) -> HttpRespo
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    let (host, port) = ("0.0.0.0", 80);
     config::init_config();
     let forest = Data::new(Mutex::new(filter::forest::FilterForest::new()));
     print_hello();
+    println!("service running at {:}:{}", host, port);
     HttpServer::new(move || {
         App::new()
         .app_data(forest.clone())
@@ -109,7 +111,7 @@ async fn main() -> std::io::Result<()> {
         .service(add)
         .service(detect)
     })
-    .bind(("0.0.0.0", 80))?
+    .bind((host, port))?
     .run()
     .await
 }

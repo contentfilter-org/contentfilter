@@ -7,14 +7,30 @@ use std::fmt;
 use std::boxed::Box;
 use serde::Serialize;
 use std::collections::HashMap;
-use text::trie::TrieTree;
+use trie::TrieTree;
+use dhash::dhash;
+use dhash::hamming_distance;
+use image::load_from_memory;
+use std::cmp::Ordering::Equal;
+use std::str::FromStr;
 
 
 #[derive(Debug)]
 pub enum FilterType{
     TextWordMatch,
-    ImageDhashMatch,
-    ImageFaceSimilaityMatch 
+    ImageDhashMatch
+}
+
+impl FromStr for FilterType {
+    type Err = ();
+
+    fn from_str(input: &str) -> Result<FilterType, Self::Err> {
+        match input {
+            "TextWordMatch"  => Ok(FilterType::TextWordMatch),
+            "ImageDhashMatch"  => Ok(FilterType::ImageDhashMatch),
+            _ => Err(()),
+        }
+    }
 }
 
 impl fmt::Display for FilterType {
@@ -30,7 +46,8 @@ pub struct Sieve {
     dr_md5: String,  // dr means dense representation
     dr_dhash: u64,
     create_time: u64,
-    property_map: String
+    property_map: String,
+    similarity: f32
 }
 
 impl Sieve {
@@ -41,16 +58,22 @@ impl Sieve {
             dr_md5: dr_md5.clone(),
             dr_dhash: dr_dhash,
             create_time: create_time,
-            property_map: property_map.clone()
+            property_map: property_map.clone(),
+            similarity: 1.0f32
         };
         sieve
+    }
+
+    pub fn set_similarity(&mut self, similarity: f32) {
+        self.similarity = similarity;
     }
 }
 
 pub trait Filter: Send {
     fn count(&mut self) -> u64;
-    fn add_sieve(&mut self, target: &String, property_map: &String);
-    fn detect(&mut self, content: &String) -> Vec<&Sieve>;
+    fn add_sieve(&mut self, target: &String, property_map: &String) -> ServiceStatus;
+    fn detect(&mut self, content: &String) -> (ServiceStatus, Vec<&Sieve>);
+    fn calc_dhash(&mut self, target: &String) -> (ServiceStatus, u64);
 }
 
 pub struct TextWordMatchFilter{
@@ -73,35 +96,122 @@ impl TextWordMatchFilter {
             target_to_id.insert(target.clone(), id);
             trie_tree.insert(&target);
         }
-        let filter = TextWordMatchFilter{
+        TextWordMatchFilter{
             filter_type: FilterType::TextWordMatch,
             sieves: sieves,
             target_to_id: target_to_id,
             filter_name: filter_name.clone(),
             labels: labels.clone(),
             trie_tree: trie_tree
-        };
-        filter
+        }
     }
 }
 
-impl Filter for TextWordMatchFilter {
+pub struct ImageDhashMatchFilter{
+    filter_type: FilterType,
+    sieves: HashMap<u64, Sieve>,
+    filter_name: String,
+    labels: Vec<String>
+}
+
+impl ImageDhashMatchFilter {
+    pub fn new(filter_name: &String, labels: &Vec<String>) -> ImageDhashMatchFilter {
+        let mut sieves: HashMap<u64, Sieve> = HashMap::new();
+        for (id, target, dr_md5, dr_dhash, property_map, create_time) in store::read_sieves(filter_name) {
+            let added_sieve = Sieve::new(id, &target, &dr_md5, dr_dhash, &property_map, create_time);
+            sieves.insert(id, added_sieve);
+        }
+        ImageDhashMatchFilter{
+            filter_type: FilterType::ImageDhashMatch,
+            sieves: sieves,
+            filter_name: filter_name.clone(),
+            labels: labels.clone()
+        }
+    }
+}
+
+impl Filter for ImageDhashMatchFilter {
+    fn calc_dhash(&mut self, target: &String) -> (ServiceStatus, u64) {
+        let mut dr_dhash: u64 = 18446744073709551615;
+        let target_bytes = base64::decode(target);
+        if let Err(_e) = target_bytes {
+            return (ServiceStatus::InvalidImageError, dr_dhash)
+        }
+        let dyn_image = load_from_memory(&target_bytes.unwrap());
+        if let Err(_e) = dyn_image {
+            return (ServiceStatus::InvalidImageError, dr_dhash);
+        }
+        dr_dhash = dhash(&dyn_image.unwrap());
+        (ServiceStatus::Success, dr_dhash)
+    }
+
     fn count(&mut self) -> u64 {
         self.sieves.len() as u64
     }
 
-    fn add_sieve(&mut self, target: &String, property_map: &String) {
+    fn add_sieve(&mut self, target: &String, property_map: &String) -> ServiceStatus {
         let dr_md5 = format!("{:?}", md5::compute(target.as_bytes()));
-        let dr_dhash: u64 = 0;
+        let (status, dr_dhash) = self.calc_dhash(target);
+        if status != ServiceStatus::Success {
+            return status;
+        }
+        if let Ok((id, create_time)) = store::add_sieve(&self.filter_name, target, &dr_md5, dr_dhash, property_map) {
+            let added_sieve = Sieve::new(id, &target, &dr_md5, dr_dhash, property_map, create_time);
+            self.sieves.insert(id, added_sieve);
+            return ServiceStatus::Success;
+        }
+        ServiceStatus::SieveAddError
+    }
+
+    fn detect(&mut self, content: &String) -> (ServiceStatus, Vec<&Sieve>) {
+        let mut matched_sieves: Vec<&Sieve> = Vec::new();
+        let content_bytes = base64::decode(content);
+        if let Err(_e) = content_bytes {
+            return (ServiceStatus::InvalidImageError, matched_sieves)
+        }
+        let dyn_image = load_from_memory(&content_bytes.unwrap());
+        if let Err(_e) = dyn_image {
+            return (ServiceStatus::InvalidImageError, matched_sieves);
+        }
+        let dr_dhash = dhash(&dyn_image.unwrap());
+        for sieve in self.sieves.values_mut() {
+            let distance = hamming_distance(dr_dhash, sieve.dr_dhash);
+            if distance <= 15 {
+                sieve.set_similarity(1.0f32 - distance as f32 / 64f32);
+                matched_sieves.push(sieve);
+            }
+        }
+        matched_sieves.sort_by(|a, b| a.similarity.partial_cmp(&b.similarity).unwrap_or(Equal));
+        matched_sieves.reverse();
+        (ServiceStatus::Success, matched_sieves)
+    }
+}
+
+impl Filter for TextWordMatchFilter {
+    fn calc_dhash(&mut self, _target: &String) -> (ServiceStatus, u64) {
+        let dr_dhash: u64 = 18446744073709551615;
+        (ServiceStatus::Success, dr_dhash)
+    }
+
+    fn count(&mut self) -> u64 {
+        self.sieves.len() as u64
+    }
+
+    fn add_sieve(&mut self, target: &String, property_map: &String) -> ServiceStatus {
+        let dr_md5 = format!("{:?}", md5::compute(target.as_bytes()));
+        let (_status, dr_dhash) = self.calc_dhash(target);
+
         if let Ok((id, create_time)) = store::add_sieve(&self.filter_name, target, &dr_md5, dr_dhash, property_map) {
             let added_sieve = Sieve::new(id, &target, &dr_md5, dr_dhash, property_map, create_time);
             self.sieves.insert(id, added_sieve);
             self.target_to_id.insert(target.clone(), id);
             self.trie_tree.insert(target);
+            return ServiceStatus::Success;
         }
+        ServiceStatus::SieveAddError
     }
 
-    fn detect(&mut self, content: &String) -> Vec<&Sieve> {
+    fn detect(&mut self, content: &String) -> (ServiceStatus, Vec<&Sieve>) {
         let matched_words = self.trie_tree.find(content);
         let mut matched_sieves: Vec<&Sieve> = Vec::new();
         for word in matched_words {
@@ -109,7 +219,7 @@ impl Filter for TextWordMatchFilter {
             let matched_sieve = self.sieves.get(sieve_id).unwrap();
             matched_sieves.push(matched_sieve);
         }
-        matched_sieves
+        (ServiceStatus::Success, matched_sieves)
     }
 }
 
@@ -128,6 +238,9 @@ impl FilterForest {
             if filter_type == FilterType::TextWordMatch.to_string() {
                 let filter = TextWordMatchFilter::new(&raw_filter.2, &raw_filter.3);
                 filters.insert(raw_filter.2.clone(), Box::new(filter));
+            } else if filter_type == FilterType::ImageDhashMatch.to_string() {
+                let filter = ImageDhashMatchFilter::new(&raw_filter.2, &raw_filter.3);
+                filters.insert(raw_filter.2.clone(), Box::new(filter));
             } else {
                 println!("unsupported filter type: {:}", filter_type);
             }
@@ -135,13 +248,13 @@ impl FilterForest {
         FilterForest{filters: filters}
     }
 
-    pub fn detect(&mut self, filter_name: &String, content: &String) -> (Option<Vec<&Sieve>>, ServiceStatus) {
+    pub fn detect(&mut self, filter_name: &String, content: &String) -> (ServiceStatus, Vec<&Sieve>) {
+        let matched_sieves: Vec<&Sieve> = Vec::new();
         if !self.filters.contains_key(filter_name) {
-            return (None, ServiceStatus::FilterNotFoundError);
+            return (ServiceStatus::FilterNotFoundError, matched_sieves);
         }
         let filter = self.filters.get_mut(filter_name).unwrap();
-        let matched_sieves = filter.detect(content);
-        (Some(matched_sieves), ServiceStatus::Success)
+        filter.detect(content)
     }
 
     pub fn add_sieve(&mut self, filter_name: &String, target: &String, property_map: &String) -> ServiceStatus {
@@ -157,7 +270,7 @@ impl FilterForest {
         if self.filters.contains_key(filter_name) {
             return ServiceStatus::FilterExistsError;
         }
-        if *filter_type != FilterType::TextWordMatch.to_string() {
+        if let Err(_e) = FilterType::from_str(filter_type) {
             return ServiceStatus::FilterTypeNotFoundError;
         }
         store::add_filter(filter_type, filter_name, labels);

@@ -1,13 +1,16 @@
 use serde::Deserialize;
 
 
+#[derive(PartialEq)]
 pub enum ServiceStatus {
     Success,
     RequestParameterError,
     FilterNotFoundError,
     FilterExistsError,
     FilterTypeNotFoundError,
-    SieveNotFoundError
+    SieveNotFoundError,
+    SieveAddError,
+    InvalidImageError
 }
 
 impl std::fmt::Display for ServiceStatus {
@@ -19,6 +22,8 @@ impl std::fmt::Display for ServiceStatus {
             ServiceStatus::FilterExistsError => write!(f, "filter exists error"),
             ServiceStatus::FilterTypeNotFoundError => write!(f, "filter type not found error"),
             ServiceStatus::SieveNotFoundError => write!(f, "sieve not found error"),
+            ServiceStatus::SieveAddError => write!(f, "sieve add error"),
+            ServiceStatus::InvalidImageError => write!(f, "invalid image error")
         }
     }
 }

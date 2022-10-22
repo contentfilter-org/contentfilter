@@ -1,2 +1,2 @@
-pub mod text;
-pub mod image;
+pub mod trie;
+pub mod dhash;
