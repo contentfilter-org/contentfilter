@@ -55,7 +55,8 @@ fn init_filterdb(filter_name: &String) {
             CREATE TABLE IF NOT EXISTS sieve (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 target TEXT NOT NULL,
-                target_md5 TEXT NOT NULL,
+                dr_md5 TEXT NOT NULL,
+                dr_dhash INTEGER NOT NULL,
                 property_map TEXT NOT NULL,
                 create_time BIGINT NOT NULL
             );
@@ -104,7 +105,7 @@ pub fn read_filters() -> Vec<(u64, String, String, Vec<String>, u64)> {
     filters
 }
 
-pub fn add_sieve(filter_name: &String, target: &String, target_md5: &String, property_map: &String) -> Result<(u64, u64), SieveAddedError> {
+pub fn add_sieve(filter_name: &String, target: &String, dr_md5: &String, dr_dhash: u64, property_map: &String) -> Result<(u64, u64), SieveAddedError> {
     let filter_dbpath = get_filter_dbpath(filter_name);
     if !filter_dbpath.exists() {
         return Err(SieveAddedError{});
@@ -113,14 +114,14 @@ pub fn add_sieve(filter_name: &String, target: &String, target_md5: &String, pro
     connection.execute(
         format!(
             "
-                INSERT OR IGNORE INTO sieve (target, target_md5, property_map, create_time)
-                VALUES ('{:}', '{:}', '{:}', strftime('%s', 'now') * 1000);
+                INSERT OR IGNORE INTO sieve (target, dr_md5, dr_dhash, property_map, create_time)
+                VALUES ('{:}', '{:}', {:}, '{:}', strftime('%s', 'now') * 1000);
             ",
-            target, target_md5, property_map
+            target, dr_md5, dr_dhash, property_map
     )
     ).unwrap();
     let mut cursor = connection.prepare(
-        format!("SELECT id, create_time FROM sieve WHERE target_md5 = {:?}", target_md5)
+        format!("SELECT id, create_time FROM sieve WHERE dr_md5 = {:?}", dr_md5)
     ).unwrap().into_cursor();
     let mut result_tuple: (u64, u64) = (0u64, 0u64);
     if let Some(Ok(row)) = cursor.next() {
@@ -132,12 +133,12 @@ pub fn add_sieve(filter_name: &String, target: &String, target_md5: &String, pro
     Ok(result_tuple)
 }
 
-pub fn read_sieves(filter_name: &String) -> Vec<(u64, String, String, String, u64)> {
-    let mut sieves: Vec<(u64, String, String, String, u64)> = Vec::new();
+pub fn read_sieves(filter_name: &String) -> Vec<(u64, String, String, u64, String, u64)> {
+    let mut sieves: Vec<(u64, String, String, u64, String, u64)> = Vec::new();
     let filter_dbpath = get_filter_dbpath(filter_name);
     let connection = sqlite::open(&filter_dbpath).unwrap();
     let mut cursor = connection.prepare(
-        "SELECT id, target, target_md5, property_map, create_time FROM sieve"
+        "SELECT id, target, dr_md5, dr_dhash, property_map, create_time FROM sieve"
     ).unwrap().into_cursor();
     while let Some(Ok(row)) = cursor.next() {
         sieves.push(
@@ -145,8 +146,9 @@ pub fn read_sieves(filter_name: &String) -> Vec<(u64, String, String, String, u6
                 row.get::<i64, _>(0) as u64,
                 row.get::<String, _>(1),
                 row.get::<String, _>(2),
-                row.get::<String, _>(3),
-                row.get::<i64, _>(4) as u64
+                row.get::<f64, _>(3) as u64,
+                row.get::<String, _>(4),
+                row.get::<i64, _>(5) as u64
             )
         );
     }

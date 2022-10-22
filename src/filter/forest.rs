@@ -2,7 +2,6 @@ include!("../data/mod.rs");
 include!("../detection/mod.rs");
 include!("../service.rs");
 
-use serde_json;
 use md5;
 use std::fmt;
 use std::boxed::Box;
@@ -26,19 +25,21 @@ impl fmt::Display for FilterType {
 
 #[derive(Serialize, Debug)]
 pub struct Sieve {
+    id: u64,
     target: String,
-    target_id: u64,
-    target_md5: String,
+    dr_md5: String,  // dr means dense representation
+    dr_dhash: u64,
     create_time: u64,
     property_map: String
 }
 
 impl Sieve {
-    pub fn new(target_id: u64, target: &String, target_md5: &String, property_map: &String, create_time: u64) -> Sieve {
+    pub fn new(id: u64, target: &String, dr_md5: &String, dr_dhash: u64, property_map: &String, create_time: u64) -> Sieve {
         let sieve = Sieve{
+            id: id,
             target: target.clone(),
-            target_id: target_id,
-            target_md5: target_md5.clone(),
+            dr_md5: dr_md5.clone(),
+            dr_dhash: dr_dhash,
             create_time: create_time,
             property_map: property_map.clone()
         };
@@ -66,13 +67,11 @@ impl TextWordMatchFilter {
         let mut sieves: HashMap<u64, Sieve> = HashMap::new();
         let mut trie_tree = TrieTree::new();
         let mut target_to_id: HashMap<String, u64> = HashMap::new();
-        for sieve_tup in store::read_sieves(filter_name) {
-            let added_sieve = Sieve::new(
-                sieve_tup.0, &sieve_tup.1, &sieve_tup.2, &sieve_tup.3, sieve_tup.4
-            );
-            sieves.insert(sieve_tup.0, added_sieve);
-            target_to_id.insert(sieve_tup.1.clone(), sieve_tup.0);
-            trie_tree.insert(&sieve_tup.1);
+        for (id, target, dr_md5, dr_dhash, property_map, create_time) in store::read_sieves(filter_name) {
+            let added_sieve = Sieve::new(id, &target, &dr_md5, dr_dhash, &property_map, create_time);
+            sieves.insert(id, added_sieve);
+            target_to_id.insert(target.clone(), id);
+            trie_tree.insert(&target);
         }
         let filter = TextWordMatchFilter{
             filter_type: FilterType::TextWordMatch,
@@ -92,11 +91,12 @@ impl Filter for TextWordMatchFilter {
     }
 
     fn add_sieve(&mut self, target: &String, property_map: &String) {
-        let target_md5 = format!("{:?}", md5::compute(target.as_bytes()));
-        if let Ok((sieve_id, create_time)) = store::add_sieve(&self.filter_name, target, &target_md5, property_map) {
-            let added_sieve = Sieve::new(sieve_id, target, &target_md5, property_map, create_time);
-            self.sieves.insert(sieve_id, added_sieve);
-            self.target_to_id.insert(target.clone(), sieve_id);
+        let dr_md5 = format!("{:?}", md5::compute(target.as_bytes()));
+        let dr_dhash: u64 = 0;
+        if let Ok((id, create_time)) = store::add_sieve(&self.filter_name, target, &dr_md5, dr_dhash, property_map) {
+            let added_sieve = Sieve::new(id, &target, &dr_md5, dr_dhash, property_map, create_time);
+            self.sieves.insert(id, added_sieve);
+            self.target_to_id.insert(target.clone(), id);
             self.trie_tree.insert(target);
         }
     }
