@@ -11,28 +11,28 @@ These are a list of concepts or interfaces for helping to use Contentfilter.
   <tr>
     <td rowspan="2">Text</td>
     <td>TextWordMatch</td>
-    <td></td>
+    <td>Check if a text is hit by some words.</td>
     <td>✅</td>
   </tr>
   <tr>
     <td>TextSimilarityMatch</td>
-    <td></td>
+    <td>Check if a text matches some texts by a text similarity algorithm.</td>
     <td>🚧</td>
   </tr>
   <tr>
     <td rowspan="3">Image</td>
     <td>ImageDhashMatch</td>
-    <td></td>
+    <td>Check if an image matches some images by dHash algorithm.</td>
     <td>✅</td>
   </tr>
   <tr>
     <td>ImageSimilarityMatch</td>
-    <td></td>
+    <td>Check if an image matches some images by an image similarity algorithm.</td>
     <td>🚧</td>
   </tr>
   <tr>
     <td>ImageFaceSimilarityMatch</td>
-    <td></td>
+    <td>Check if a face in an image matches some faces by a face similarity algorithm.</td>
     <td>🚧</td>
   </tr>
 </table>
