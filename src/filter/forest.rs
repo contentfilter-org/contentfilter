@@ -5,7 +5,8 @@ include!("../service.rs");
 use md5;
 use std::fmt;
 use std::boxed::Box;
-use serde::Serialize;
+// use serde::Serialize;
+use serde::ser::{Serialize, Serializer, SerializeStruct};
 use std::collections::HashMap;
 use trie::TrieTree;
 use dhash::dhash;
@@ -39,7 +40,7 @@ impl fmt::Display for FilterType {
     }
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Debug)]
 pub struct Sieve {
     id: u64,
     target: String,
@@ -47,11 +48,35 @@ pub struct Sieve {
     dr_dhash: u64,
     create_time: u64,
     property_map: String,
-    similarity: f32
+    similarity: f32,
+    serilize_target: bool
+}
+
+impl Serialize for Sieve {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut num_fields: usize = 7;
+        if self.serilize_target == false {
+            num_fields = 6usize;
+        }
+        let mut state = serializer.serialize_struct("Sieve", num_fields)?;
+        state.serialize_field("id", &self.id)?;
+        if self.serilize_target {
+            state.serialize_field("target", &self.target)?;
+        }
+        state.serialize_field("dr_md5", &self.dr_md5)?;
+        state.serialize_field("dr_dhash", &self.dr_dhash)?;
+        state.serialize_field("create_time", &self.create_time)?;
+        state.serialize_field("property_map", &self.property_map)?;
+        state.serialize_field("similarity", &self.similarity)?;
+        state.end()
+    }
 }
 
 impl Sieve {
-    pub fn new(id: u64, target: &String, dr_md5: &String, dr_dhash: u64, property_map: &String, create_time: u64) -> Sieve {
+    pub fn new(id: u64, target: &String, dr_md5: &String, dr_dhash: u64, property_map: &String, create_time: u64, serilize_target: bool) -> Sieve {
         let sieve = Sieve{
             id: id,
             target: target.clone(),
@@ -59,7 +84,8 @@ impl Sieve {
             dr_dhash: dr_dhash,
             create_time: create_time,
             property_map: property_map.clone(),
-            similarity: 1.0f32
+            similarity: 1.0f32,
+            serilize_target: serilize_target
         };
         sieve
     }
@@ -91,7 +117,7 @@ impl TextWordMatchFilter {
         let mut trie_tree = TrieTree::new();
         let mut target_to_id: HashMap<String, u64> = HashMap::new();
         for (id, target, dr_md5, dr_dhash, property_map, create_time) in store::read_sieves(filter_name) {
-            let added_sieve = Sieve::new(id, &target, &dr_md5, dr_dhash, &property_map, create_time);
+            let added_sieve = Sieve::new(id, &target, &dr_md5, dr_dhash, &property_map, create_time, true);
             sieves.insert(id, added_sieve);
             target_to_id.insert(target.clone(), id);
             trie_tree.insert(&target);
@@ -118,7 +144,7 @@ impl ImageDhashMatchFilter {
     pub fn new(filter_name: &String, labels: &Vec<String>) -> ImageDhashMatchFilter {
         let mut sieves: HashMap<u64, Sieve> = HashMap::new();
         for (id, target, dr_md5, dr_dhash, property_map, create_time) in store::read_sieves(filter_name) {
-            let added_sieve = Sieve::new(id, &target, &dr_md5, dr_dhash, &property_map, create_time);
+            let added_sieve = Sieve::new(id, &target, &dr_md5, dr_dhash, &property_map, create_time, false);
             sieves.insert(id, added_sieve);
         }
         ImageDhashMatchFilter{
@@ -159,7 +185,7 @@ impl Filter for ImageDhashMatchFilter {
             if self.sieves.contains_key(&id) {
                 return ServiceStatus::SieveAddError;
             }
-            let added_sieve = Sieve::new(id, &target, &dr_md5, dr_dhash, property_map, create_time);
+            let added_sieve = Sieve::new(id, &target, &dr_md5, dr_dhash, property_map, create_time, false);
             self.sieves.insert(id, added_sieve);
             return ServiceStatus::Success;
         }
@@ -208,7 +234,7 @@ impl Filter for TextWordMatchFilter {
             if self.sieves.contains_key(&id) {
                 return ServiceStatus::SieveAddError;
             }
-            let added_sieve = Sieve::new(id, &target, &dr_md5, dr_dhash, property_map, create_time);
+            let added_sieve = Sieve::new(id, &target, &dr_md5, dr_dhash, property_map, create_time, true);
             self.sieves.insert(id, added_sieve);
             self.target_to_id.insert(target.clone(), id);
             self.trie_tree.insert(target);
