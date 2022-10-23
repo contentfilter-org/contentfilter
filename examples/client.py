@@ -29,8 +29,8 @@ def add():
             {
                 "filter_name": "chinese_porn_words",
                 "target": word,
-                "props": {
-                    "create_time": int(time.time())
+                "property_map": {
+                    "create_time": "0"
                 }
 
             },
