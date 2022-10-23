@@ -78,7 +78,7 @@ pub fn add_filter(filter_type: &String, filter_name: &String, labels: &Vec<Strin
             "
                 INSERT INTO filter (filter_type, filter_name, labels, create_time) 
                 VALUES ('{:}', '{:}', '{:}', strftime('%s', 'now') * 1000)
-            ", filter_type, filter_name, labels.join(";")
+            ", filter_type, filter_name.replace("'", "''"), labels.join(";")
         )
     ).unwrap();
     init_filterdb(filter_name);
@@ -118,7 +118,7 @@ pub fn add_sieve(filter_name: &String, target: &String, dr_md5: &String, dr_dhas
                     INSERT OR IGNORE INTO sieve (target, dr_md5, dr_dhash, property_map, create_time)
                     VALUES ('{}', '{}', '{}', '{}', strftime('%s', 'now') * 1000);
                 ",
-                target, dr_md5, dr_dhash.to_string(), property_map
+                target.replace("'", "''"), dr_md5, dr_dhash.to_string(), property_map
         )
     ).unwrap();
     let mut cursor = connection.prepare(

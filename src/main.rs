@@ -89,7 +89,8 @@ pub async fn detect(forest: Data<Mutex<FilterForest>>, body: Bytes) -> HttpRespo
                 {
                     "status": op_status.to_string(),
                     "time": start_time.elapsed().as_secs_f64(),
-                    "hits": &matched_sieves
+                    "hits": &matched_sieves,
+                    "count": matched_sieves.len()
                 }
             )
         },
