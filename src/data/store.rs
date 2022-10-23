@@ -56,9 +56,10 @@ fn init_filterdb(filter_name: &String) {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 target TEXT NOT NULL,
                 dr_md5 TEXT NOT NULL,
-                dr_dhash INTEGER NOT NULL,
+                dr_dhash TEXT NOT NULL,
                 property_map TEXT NOT NULL,
-                create_time BIGINT NOT NULL
+                create_time BIGINT NOT NULL,
+                UNIQUE(dr_md5)
             );
         "
     ).unwrap();
@@ -113,12 +114,12 @@ pub fn add_sieve(filter_name: &String, target: &String, dr_md5: &String, dr_dhas
     let connection = sqlite::open(&filter_dbpath).unwrap();
     connection.execute(
         format!(
-            "
-                INSERT OR IGNORE INTO sieve (target, dr_md5, dr_dhash, property_map, create_time)
-                VALUES ('{:}', '{:}', {:}, '{:}', strftime('%s', 'now') * 1000);
-            ",
-            target, dr_md5, dr_dhash, property_map
-    )
+                "
+                    INSERT OR IGNORE INTO sieve (target, dr_md5, dr_dhash, property_map, create_time)
+                    VALUES ('{}', '{}', '{}', '{}', strftime('%s', 'now') * 1000);
+                ",
+                target, dr_md5, dr_dhash.to_string(), property_map
+        )
     ).unwrap();
     let mut cursor = connection.prepare(
         format!("SELECT id, create_time FROM sieve WHERE dr_md5 = {:?}", dr_md5)
@@ -146,7 +147,7 @@ pub fn read_sieves(filter_name: &String) -> Vec<(u64, String, String, u64, Strin
                 row.get::<i64, _>(0) as u64,
                 row.get::<String, _>(1),
                 row.get::<String, _>(2),
-                row.get::<f64, _>(3) as u64,
+                row.get::<String, _>(3).parse::<u64>().unwrap(),
                 row.get::<String, _>(4),
                 row.get::<i64, _>(5) as u64
             )

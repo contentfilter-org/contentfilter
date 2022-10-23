@@ -2,15 +2,23 @@ mod config;
 mod filter;
 mod service;
 
-use std::time::Instant;
-use std::sync::Mutex;
-use actix_web::{web::Data, App, HttpServer};
 use actix_web::{
-    web::{Bytes},
-    post, HttpResponse,
+    App,
+    post, 
+    HttpResponse, 
+    HttpServer,
+    web::{Bytes, PayloadConfig, Data}
 };
+use std::sync::Mutex;
+use std::time::Instant;
 use filter::forest::FilterForest;
-use service::{FilterCreateRequest, SieveAddRequest, DetectRequest, ServiceStatus, print_hello};
+use service::{
+    FilterCreateRequest, 
+    SieveAddRequest, 
+    DetectRequest, 
+    ServiceStatus, 
+    print_hello
+};
 
 
 #[post("/filter/create")]
@@ -106,6 +114,7 @@ async fn main() -> std::io::Result<()> {
     println!("service running at {:}:{}", host, port);
     HttpServer::new(move || {
         App::new()
+        .app_data(PayloadConfig::new(1000000 * 250))
         .app_data(forest.clone())
         .service(create)
         .service(add)

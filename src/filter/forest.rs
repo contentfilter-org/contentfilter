@@ -15,7 +15,7 @@ use std::cmp::Ordering::Equal;
 use std::str::FromStr;
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum FilterType{
     TextWordMatch,
     ImageDhashMatch
@@ -156,6 +156,9 @@ impl Filter for ImageDhashMatchFilter {
             return status;
         }
         if let Ok((id, create_time)) = store::add_sieve(&self.filter_name, target, &dr_md5, dr_dhash, property_map) {
+            if self.sieves.contains_key(&id) {
+                return ServiceStatus::SieveAddError;
+            }
             let added_sieve = Sieve::new(id, &target, &dr_md5, dr_dhash, property_map, create_time);
             self.sieves.insert(id, added_sieve);
             return ServiceStatus::Success;
@@ -202,6 +205,9 @@ impl Filter for TextWordMatchFilter {
         let (_status, dr_dhash) = self.calc_dhash(target);
 
         if let Ok((id, create_time)) = store::add_sieve(&self.filter_name, target, &dr_md5, dr_dhash, property_map) {
+            if self.sieves.contains_key(&id) {
+                return ServiceStatus::SieveAddError;
+            }
             let added_sieve = Sieve::new(id, &target, &dr_md5, dr_dhash, property_map, create_time);
             self.sieves.insert(id, added_sieve);
             self.target_to_id.insert(target.clone(), id);
@@ -262,20 +268,26 @@ impl FilterForest {
             return ServiceStatus::FilterNotFoundError;
         }
         let filter = self.filters.get_mut(filter_name).unwrap();
-        filter.add_sieve(target, property_map);
-        ServiceStatus::Success
+        filter.add_sieve(target, property_map)
     }
 
     pub fn add_filter(&mut self, filter_type: &String, filter_name: &String, labels: &Vec<String>) -> ServiceStatus {
         if self.filters.contains_key(filter_name) {
             return ServiceStatus::FilterExistsError;
         }
-        if let Err(_e) = FilterType::from_str(filter_type) {
+        let filter_type_from_str = FilterType::from_str(filter_type);
+        if let Err(_e) = filter_type_from_str {
             return ServiceStatus::FilterTypeNotFoundError;
         }
         store::add_filter(filter_type, filter_name, labels);
-        let filter = TextWordMatchFilter::new(filter_name, labels);
-        self.filters.insert(filter_name.clone(), Box::new(filter));
+        let filter_type_from_str = filter_type_from_str.unwrap();
+        if filter_type_from_str == FilterType::TextWordMatch {
+            let filter = TextWordMatchFilter::new(filter_name, labels);
+            self.filters.insert(filter_name.clone(), Box::new(filter));
+        } else if filter_type_from_str == FilterType::ImageDhashMatch {
+            let filter = ImageDhashMatchFilter::new(filter_name, labels);
+            self.filters.insert(filter_name.clone(), Box::new(filter));
+        }
         ServiceStatus::Success
     }
 }
