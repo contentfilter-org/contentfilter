@@ -168,7 +168,7 @@ impl Filter for ImageDhashMatchFilter {
             return (ServiceStatus::InvalidImageError, dr_dhash);
         }
         dr_dhash = dhash(&dyn_image.unwrap());
-        (ServiceStatus::Success, dr_dhash)
+        (ServiceStatus::Ok, dr_dhash)
     }
 
     fn count(&mut self) -> u64 {
@@ -178,7 +178,7 @@ impl Filter for ImageDhashMatchFilter {
     fn add_sieve(&mut self, target: &String, property_map: &String) -> ServiceStatus {
         let dr_md5 = format!("{:?}", md5::compute(target.as_bytes()));
         let (status, dr_dhash) = self.calc_dhash(target);
-        if status != ServiceStatus::Success {
+        if status != ServiceStatus::Ok {
             return status;
         }
         if let Ok((id, create_time)) = store::add_sieve(&self.filter_name, target, &dr_md5, dr_dhash, property_map) {
@@ -187,7 +187,7 @@ impl Filter for ImageDhashMatchFilter {
             }
             let added_sieve = Sieve::new(id, &target, &dr_md5, dr_dhash, property_map, create_time, false);
             self.sieves.insert(id, added_sieve);
-            return ServiceStatus::Success;
+            return ServiceStatus::Ok;
         }
         ServiceStatus::SieveAddError
     }
@@ -212,14 +212,14 @@ impl Filter for ImageDhashMatchFilter {
         }
         matched_sieves.sort_by(|a, b| a.similarity.partial_cmp(&b.similarity).unwrap_or(Equal));
         matched_sieves.reverse();
-        (ServiceStatus::Success, matched_sieves)
+        (ServiceStatus::Ok, matched_sieves)
     }
 }
 
 impl Filter for TextWordMatchFilter {
     fn calc_dhash(&mut self, _target: &String) -> (ServiceStatus, u64) {
         let dr_dhash: u64 = 18446744073709551615;
-        (ServiceStatus::Success, dr_dhash)
+        (ServiceStatus::Ok, dr_dhash)
     }
 
     fn count(&mut self) -> u64 {
@@ -238,7 +238,7 @@ impl Filter for TextWordMatchFilter {
             self.sieves.insert(id, added_sieve);
             self.target_to_id.insert(target.clone(), id);
             self.trie_tree.insert(target);
-            return ServiceStatus::Success;
+            return ServiceStatus::Ok;
         }
         ServiceStatus::SieveAddError
     }
@@ -251,7 +251,7 @@ impl Filter for TextWordMatchFilter {
             let matched_sieve = self.sieves.get(sieve_id).unwrap();
             matched_sieves.push(matched_sieve);
         }
-        (ServiceStatus::Success, matched_sieves)
+        (ServiceStatus::Ok, matched_sieves)
     }
 }
 
@@ -314,6 +314,6 @@ impl FilterForest {
             let filter = ImageDhashMatchFilter::new(filter_name, labels);
             self.filters.insert(filter_name.clone(), Box::new(filter));
         }
-        ServiceStatus::Success
+        ServiceStatus::Ok
     }
 }

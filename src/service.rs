@@ -3,7 +3,7 @@ use serde::Deserialize;
 
 #[derive(PartialEq)]
 pub enum ServiceStatus {
-    Success,
+    Ok,
     RequestParameterError,
     FilterNotFoundError,
     FilterExistsError,
@@ -16,7 +16,7 @@ pub enum ServiceStatus {
 impl std::fmt::Display for ServiceStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
-            ServiceStatus::Success => write!(f, "success"),
+            ServiceStatus::Ok => write!(f, "ok"),
             ServiceStatus::RequestParameterError => write!(f, "request parameter error"),
             ServiceStatus::FilterNotFoundError => write!(f, "filter not found error"),
             ServiceStatus::FilterExistsError => write!(f, "filter exists error"),
