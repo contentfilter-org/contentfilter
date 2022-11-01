@@ -1,10 +1,14 @@
 #[path="../config/mod.rs"]
 mod config;
 
+use std::fs;
 use std::env;
 use std::fmt;
-use std::path::PathBuf;
+use image::EncodableLayout;
 use sqlite;
+use std::path::PathBuf;
+use actix_web::web::Bytes;
+use rand::{distributions::Alphanumeric, Rng};
 
 
 const FOREST_DBNAME: &str = "__FOREST__.sqlite";
@@ -155,3 +159,30 @@ pub fn read_sieves(filter_name: &String) -> Vec<(u64, String, String, u64, Strin
     }
     sieves
 }
+
+fn keygen() -> String {
+    rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(10)
+        .map(char::from)
+        .collect()
+}
+
+pub fn upload_blobfile(file: Bytes) -> String {
+    let key = loop {
+        let new_key = keygen();
+        let blob_folder: PathBuf = PathBuf::from(env::var(config::BLOB_FOLDER).unwrap());
+        let file_path = blob_folder.join(&new_key);
+        if !file_path.exists() {
+            break new_key;
+        }
+    };
+    let blob_folder: PathBuf = PathBuf::from(env::var(config::BLOB_FOLDER).unwrap());
+    let file_path = blob_folder.join(&key);
+    let status = fs::write(file_path, file.as_bytes());
+    if let Ok(_) = status {
+        return key;
+    }
+    "".to_string()
+}
+

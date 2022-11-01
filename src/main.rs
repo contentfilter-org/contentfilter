@@ -1,3 +1,4 @@
+mod data;
 mod config;
 mod filter;
 mod service;
@@ -9,6 +10,7 @@ use actix_web::{
     HttpServer,
     web::{Bytes, PayloadConfig, Data}
 };
+use data::store::upload_blobfile;
 use std::sync::Mutex;
 use std::time::Instant;
 use filter::forest::FilterForest;
@@ -19,6 +21,23 @@ use service::{
     ServiceStatus, 
     print_hello
 };
+
+
+#[post("/blob/upload")]
+pub async fn upload(body: Bytes) -> HttpResponse {
+    let start_time = Instant::now();
+    let key = upload_blobfile(body);
+    let rsp_obj = serde_json::json!(
+        {
+            "status": ServiceStatus::Ok.to_string(),
+            "time": start_time.elapsed().as_secs_f64(),
+            "key": key
+        }
+    );
+    HttpResponse::Ok()
+    .content_type("application/json")
+    .body(rsp_obj.to_string()) 
+}
 
 
 #[post("/filter/create")]
@@ -120,6 +139,7 @@ async fn main() -> std::io::Result<()> {
         .service(create)
         .service(add)
         .service(detect)
+        .service(upload)
     })
     .bind((host, port))?
     .run()

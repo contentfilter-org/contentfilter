@@ -2,6 +2,7 @@ use serde::Deserialize;
 
 
 #[derive(PartialEq)]
+#[allow(dead_code)]
 pub enum ServiceStatus {
     Ok,
     RequestParameterError,

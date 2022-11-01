@@ -5,7 +5,6 @@ include!("../service.rs");
 use md5;
 use std::fmt;
 use std::boxed::Box;
-// use serde::Serialize;
 use serde::ser::{Serialize, Serializer, SerializeStruct};
 use std::collections::HashMap;
 use trie::TrieTree;
