@@ -1,12 +1,15 @@
 #[path="../config/mod.rs"]
 mod config;
+#[path="../service.rs"]
+mod service;
 
+use sqlite;
 use std::fs;
 use std::env;
 use std::fmt;
-use image::EncodableLayout;
-use sqlite;
 use std::path::PathBuf;
+use image::EncodableLayout;
+use service::ServiceStatus;
 use actix_web::web::Bytes;
 use rand::{distributions::Alphanumeric, Rng};
 
@@ -168,7 +171,7 @@ fn keygen() -> String {
         .collect()
 }
 
-pub fn upload_blobfile(file: Bytes) -> String {
+pub fn upload_blobfile(file: Bytes) -> (ServiceStatus, String) {
     let key = loop {
         let new_key = keygen();
         let blob_folder: PathBuf = PathBuf::from(env::var(config::BLOB_FOLDER).unwrap());
@@ -181,8 +184,16 @@ pub fn upload_blobfile(file: Bytes) -> String {
     let file_path = blob_folder.join(&key);
     let status = fs::write(file_path, file.as_bytes());
     if let Ok(_) = status {
-        return key;
+        return (ServiceStatus::Ok, key);
     }
-    "".to_string()
+    (ServiceStatus::FileUploadError, "".to_string())
 }
 
+pub fn download_blobfile(key: String) -> (ServiceStatus, Option<PathBuf>) {
+    let blob_folder: PathBuf = PathBuf::from(env::var(config::BLOB_FOLDER).unwrap());
+    let file_path = blob_folder.join(&key);
+    if file_path.exists() {
+        return (ServiceStatus::Ok, Some(file_path));
+    }
+    (ServiceStatus::FileNotFoundError, None)
+}

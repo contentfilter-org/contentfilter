@@ -6,12 +6,14 @@ mod service;
 use actix_web::{
     App,
     post, 
+    get,
+    HttpRequest,
     HttpResponse, 
     HttpServer,
     web::{Bytes, PayloadConfig, Data}
 };
-use data::store::upload_blobfile;
-use std::sync::Mutex;
+use data::store::{upload_blobfile, download_blobfile};
+use std::{sync::Mutex};
 use std::time::Instant;
 use filter::forest::FilterForest;
 use service::{
@@ -23,20 +25,37 @@ use service::{
 };
 
 
+#[get("/")]
+pub async fn index() -> HttpResponse {
+    HttpResponse::Ok().content_type("text/plain").body("You know, for content filter!")
+}
+
+
 #[post("/blob/upload")]
 pub async fn upload(body: Bytes) -> HttpResponse {
     let start_time = Instant::now();
-    let key = upload_blobfile(body);
+    let (op_status, key) = upload_blobfile(body);
     let rsp_obj = serde_json::json!(
         {
-            "status": ServiceStatus::Ok.to_string(),
+            "status": op_status.to_string(),
             "time": start_time.elapsed().as_secs_f64(),
-            "key": key
+            "target": key
         }
     );
     HttpResponse::Ok()
     .content_type("application/json")
     .body(rsp_obj.to_string()) 
+}
+
+#[get("/blob/download/{key}")]
+pub async fn download(req: HttpRequest) -> HttpResponse {
+    let key: String = req.match_info().get("key").unwrap().parse().unwrap();
+    let (op_status, results) = download_blobfile(key);
+    if op_status.to_string() != ServiceStatus::Ok.to_string() {
+        return HttpResponse::Ok().content_type("text/plain").body("file not found!");
+    }
+    let file = actix_files::NamedFile::open_async(results.unwrap()).await.unwrap();
+    file.into_response(&req)
 }
 
 
@@ -140,6 +159,8 @@ async fn main() -> std::io::Result<()> {
         .service(add)
         .service(detect)
         .service(upload)
+        .service(download)
+        .service(index)
     })
     .bind((host, port))?
     .run()

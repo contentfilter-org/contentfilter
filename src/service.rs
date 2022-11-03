@@ -11,20 +11,24 @@ pub enum ServiceStatus {
     FilterTypeNotFoundError,
     SieveNotFoundError,
     SieveAddError,
-    InvalidImageError
+    InvalidImageError,
+    FileNotFoundError,
+    FileUploadError
 }
 
 impl std::fmt::Display for ServiceStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
             ServiceStatus::Ok => write!(f, "ok"),
-            ServiceStatus::RequestParameterError => write!(f, "request parameter error"),
-            ServiceStatus::FilterNotFoundError => write!(f, "filter not found error"),
-            ServiceStatus::FilterExistsError => write!(f, "filter exists error"),
-            ServiceStatus::FilterTypeNotFoundError => write!(f, "filter type not found error"),
-            ServiceStatus::SieveNotFoundError => write!(f, "sieve not found error"),
-            ServiceStatus::SieveAddError => write!(f, "sieve add error"),
-            ServiceStatus::InvalidImageError => write!(f, "invalid image error")
+            ServiceStatus::RequestParameterError => write!(f, "error: wrong request parameter"),
+            ServiceStatus::FilterNotFoundError => write!(f, "error: filter not found"),
+            ServiceStatus::FilterExistsError => write!(f, "error: filter exists"),
+            ServiceStatus::FilterTypeNotFoundError => write!(f, "error: filter type not found"),
+            ServiceStatus::SieveNotFoundError => write!(f, "error: sieve not found"),
+            ServiceStatus::SieveAddError => write!(f, "error: can not add sieve"),
+            ServiceStatus::InvalidImageError => write!(f, "error: invalid image"),
+            ServiceStatus::FileNotFoundError => write!(f, "error: file not found"),
+            ServiceStatus::FileUploadError => write!(f, "error: can not upload file")
         }
     }
 }
